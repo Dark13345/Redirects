@@ -2302,7 +2302,7 @@ function closeRequest(){
 // поля модалки заполняем из тех же словарей, что и основную форму
 function buildRequestFields(){
   const contactLink = document.getElementById("contactLink");
-  contactLink.textContent = REQUEST_CONTACT.chat;
+  contactLink.textContent = REQUEST_CONTACT.chat.replace(/^https?:\/\/matrix\.to\/#\//, "");
 
   fillSelect(reqResource, Object.keys(RESOURCES), RESOURCES, false);
   const displayPlacements = placementsForDisplay();

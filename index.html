@@ -790,14 +790,11 @@
 
   .ghost-btn:hover{ border-color: var(--ink-4); color: var(--ink); }
 
-  .contact-link{
-    color: var(--green-dark);
-    font-weight: 700;
-    text-decoration: underline;
-    text-underline-offset: 2px;
+  .contact-text{
+    color: var(--ink-2);
+    font-weight: 600;
+    word-break: break-all;
   }
-
-  .contact-link:hover{ color: var(--green); }
 
 
   body.modal-open{ overflow: hidden; }
@@ -984,7 +981,7 @@
               <svg class="icon-done" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>
             </button>
           </div>
-          <p class="rule-hint">Заявки принимает <a class="contact-link" id="contactLink" href="#" target="_blank" rel="noopener"></a> — скопируйте сообщение и отправьте ему в чат.</p>
+          <p class="rule-hint">Заявки принимает <span class="contact-text" id="contactLink"></span> — скопируйте сообщение и отправьте ему в чат.</p>
         </div>
       </div>
 
@@ -1487,6 +1484,27 @@ const VERIFIED_LINKS = [
   { res:"Личный кабинет", sec:"Реферальные ссылки и промо", loc:"en", pl:"Другое (Универсальная ссылка)", url:"https://npb.markets-official.com/poenaffiliatelinks" }
 ];
 
+/* Как назначения выглядят на экране. В таблице универсальная ссылка может
+   называться и по-старому, и по-новому — для сервиса это одно назначение. */
+const PLACEMENT_ALIASES = {
+  "другое (универсальная ссылка)": "other",
+  "универсальная ссылка": "other"
+};
+const PLACEMENT_LABELS = { other: "Универсальная ссылка" };
+const PLACEMENT_ORDER = ["other", "email", "landing", "media"];   // универсальная — первой
+
+function placementLabel(key){
+  return PLACEMENT_LABELS[key] || PLACEMENTS[key] || key;
+}
+
+// назначения для выпадающих списков: с экранными подписями и в нужном порядке
+function placementsForDisplay(){
+  const out = {};
+  PLACEMENT_ORDER.forEach(key => { if(PLACEMENTS[key]) out[key] = placementLabel(key); });
+  Object.keys(PLACEMENTS).forEach(key => { if(!(key in out)) out[key] = placementLabel(key); });
+  return out;
+}
+
 // Строки со списком локалей разворачиваем в записи по одной локали
 const ROWS = [];
 
@@ -1510,7 +1528,8 @@ function addVerifiedRows(){
     Object.keys(dict).forEach(key => { map[String(dict[key]).toLowerCase()] = key; });
     return map;
   };
-  const resKey = titleKey(RESOURCES), secKey = titleKey(SECTIONS), plKey = titleKey(PLACEMENTS);
+  const resKey = titleKey(RESOURCES), secKey = titleKey(SECTIONS);
+  const plKey = Object.assign(titleKey(PLACEMENTS), PLACEMENT_ALIASES);
 
   const taken = new Set();
   const pagePaths = {};
@@ -1642,7 +1661,7 @@ function refreshChain(){
   }
 
   const placementKeys = optionsFor("placement", { resource, section });
-  fillSelect(placementSelect, placementKeys, PLACEMENTS, true);
+  fillSelect(placementSelect, placementKeys, placementsForDisplay(), true);
 
   fieldSection.classList.toggle("is-locked", sectionKeys.length === 0);
   fieldPlacement.classList.toggle("is-locked", placementKeys.length === 0);
@@ -2019,7 +2038,7 @@ function describeSection(sectionKey){
   const groups = [];
   ROWS.forEach(row => {
     if(row.section !== sectionKey) return;
-    const label = RESOURCES[row.resource] + " · " + PLACEMENTS[row.placement];
+    const label = RESOURCES[row.resource] + " · " + placementLabel(row.placement);
     let group = groups.find(g => g.label === label);
     if(!group){ group = { label: label, locales: [] }; groups.push(group); }
     const title = localeTitle(row.locale) + (row.direct ? " (прямая)" : "");
@@ -2119,7 +2138,7 @@ function buildRedirect(sectionKey){
   const domain = domainFor(reqPlacement.value, reqResource.value);
   if(!domain){
     return { url: "", reason: "Для сочетания «" + RESOURCES[reqResource.value] + "» и «" +
-      PLACEMENTS[reqPlacement.value] + "» редиректных ссылок в справочнике нет — " +
+      placementLabel(reqPlacement.value) + "» редиректных ссылок в справочнике нет — " +
       "проверьте назначение." };
   }
 
@@ -2249,7 +2268,7 @@ function updateRequest(){
     "Ресурс: " + RESOURCES[reqResource.value],
     "Раздел: " + (sectionKey ? SECTIONS[sectionKey] : (reqSection.value.trim() || "—")),
     "Локаль: " + localeTitle(reqLocale.value),
-    "Назначение: " + PLACEMENTS[reqPlacement.value],
+    "Назначение: " + placementLabel(reqPlacement.value),
     "Редиректная ссылка: " + (redirect || "нужно создать"),
     "Целевая страница: " + (reqTarget.value.trim() || "—")
   ];
@@ -2283,11 +2302,11 @@ function closeRequest(){
 // поля модалки заполняем из тех же словарей, что и основную форму
 function buildRequestFields(){
   const contactLink = document.getElementById("contactLink");
-  contactLink.textContent = REQUEST_CONTACT.name;
-  contactLink.href = REQUEST_CONTACT.chat;
+  contactLink.textContent = REQUEST_CONTACT.chat;
 
   fillSelect(reqResource, Object.keys(RESOURCES), RESOURCES, false);
-  fillSelect(reqPlacement, Object.keys(PLACEMENTS), PLACEMENTS, false);
+  const displayPlacements = placementsForDisplay();
+  fillSelect(reqPlacement, Object.keys(displayPlacements), displayPlacements, false);
   // редиректы делают только для RU и EN — на остальных локалях сайты не блокируют
   reqLocale.innerHTML = "";
   LOCALES.filter(loc => REDIRECT_LOCALES.includes(loc.code)).forEach(loc => {
@@ -2422,8 +2441,8 @@ function parseCsv(text){
 }
 
 // названия из таблицы -> внутренние ключи; для новых делаем ключ из названия
-function keyMaker(dictionary){
-  const known = {};
+function keyMaker(dictionary, aliases){
+  const known = Object.assign({}, aliases || {});
   Object.keys(dictionary).forEach(key => { known[dictionary[key].toLowerCase().trim()] = key; });
   return title => {
     const clean = String(title || "").trim();
@@ -2448,7 +2467,7 @@ function rowsFromSheet(text){
 
   const resKey = keyMaker(FALLBACK.RESOURCES);
   const secKey = keyMaker(FALLBACK.SECTIONS);
-  const plKey  = keyMaker(FALLBACK.PLACEMENTS);
+  const plKey  = keyMaker(FALLBACK.PLACEMENTS, PLACEMENT_ALIASES);
   const localeCodes = {};
   FALLBACK.LOCALES.forEach(l => { localeCodes[l.title.toLowerCase()] = l.code; });
 
